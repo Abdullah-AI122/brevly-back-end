@@ -5,10 +5,8 @@ function isPrivateIp(ip) {
   if (!ip) return true;
   // Localhost / IPv6 Loopback
   if (ip === "::1" || ip === "127.0.0.1" || ip === "localhost") return true;
-  
   // Clean IP
   const cleanIp = ip.split(",")[0].trim();
-  
   // IPv4 Private Ranges
   if (
     cleanIp.startsWith("10.") ||
@@ -17,7 +15,6 @@ function isPrivateIp(ip) {
   ) {
     return true;
   }
-  
   return false;
 }
 
@@ -118,7 +115,7 @@ async function lookupViaIpapiIs(clientIp) {
 
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 1500);
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
     const response = await fetch(url, { signal: controller.signal });
     clearTimeout(timeoutId);
 
@@ -129,13 +126,6 @@ async function lookupViaIpapiIs(clientIp) {
 
     const asnOrganization = data.asn?.org || data.company?.name || null;
 
-    // ipapi.is's is_datacenter flag is block-level and has false positives:
-    // some real ISPs (e.g. Nayatel in Pakistan) route through IP ranges
-    // WHOIS-registered to a reseller/cloud company, tripping is_datacenter
-    // even though asn.type/company.type correctly say "isp". Trust the
-    // explicit "isp" typing over the coarser flag. is_crawler is a named
-    // bot identification (e.g. "FacebookBot") and isn't prone to this same
-    // false-positive pattern, so it's always trusted independently.
     const isExplicitIsp = data.asn?.type === "isp" || data.company?.type === "isp";
     const isAutomated = Boolean(data.is_crawler) || (!isExplicitIsp && Boolean(data.is_datacenter));
 
@@ -151,9 +141,6 @@ async function lookupViaIpapiIs(clientIp) {
   }
 }
 
-// ── Fallback classifier: freeipapi.com + our own keyword/ASN-list checks ──
-// Used only if ipapi.is is unreachable or its free daily quota is exhausted,
-// so a click is never left completely unclassified.
 async function lookupViaFreeIpApi(clientIp) {
   await ensureDatacenterAsnListFresh();
 
@@ -163,7 +150,7 @@ async function lookupViaFreeIpApi(clientIp) {
 
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 1500);
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
     const response = await fetch(url, { signal: controller.signal });
     clearTimeout(timeoutId);
 
@@ -185,16 +172,6 @@ async function lookupViaFreeIpApi(clientIp) {
   return null;
 }
 
-/**
- * Resolves the country and automated-traffic classification for an IP.
- * Tries ipapi.is first (real datacenter + named-crawler detection), falls
- * back to freeipapi.com + our own keyword/ASN-list heuristics if that
- * fails, and finally to a static default so a lookup failure never breaks
- * click tracking.
- * @param {string} ip The IP address.
- * @param {object} headers The request headers.
- * @returns {Promise<{ countryCode: string, country: string, asnOrganization: string|null, isAutomated: boolean }>}
- */
 async function getGeoData(ip, headers = {}) {
   // 1. Try Vercel country headers first
   if (headers["x-vercel-ip-country"]) {
@@ -228,12 +205,8 @@ async function getGeoData(ip, headers = {}) {
   const fallback = await lookupViaFreeIpApi(clientIp);
   if (fallback) return fallback;
 
-  return {
-    countryCode: "US",
-    country: "United States",
-    asnOrganization: null,
-    isAutomated: false,
-  };
+  // If network issues or API timeouts occur, strictly return null so unclassified requests are ignored and not tracked with a fake location
+  return null;
 }
 
 // A helper dictionary to map codes to names if needed

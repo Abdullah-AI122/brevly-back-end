@@ -32,6 +32,14 @@ const urlSchema = new mongoose.Schema(
       type: [String],
       default: [],
     },
+    campaigns: [
+      {
+        name: { type: String, required: true },
+        source: { type: String, default: "" },
+        medium: { type: String, default: "" },
+        _id: false,
+      },
+    ],
     clickLogs: [
       {
         ip: String,
@@ -56,6 +64,37 @@ const urlSchema = new mongoose.Schema(
         botReason: {
           type: String,
           default: null,
+        },
+
+        country: {
+          type: String,
+          default: "unknown",
+        },
+
+        countryCode: {
+          type: String,
+          default: "unknown",
+        },
+
+        clickedAt: {
+          type: Date,
+          default: Date.now,
+        },
+      },
+    ],
+    preClicks: {
+      type: Number,
+      default: 0,
+    },
+    preClickLogs: [
+      {
+        ip: String,
+        userAgent: String,
+        referer: String,
+
+        source: {
+          type: String,
+          default: "unknown",
         },
 
         country: {

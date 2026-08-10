@@ -1,11 +1,12 @@
 const express = require("express");
+const http = require("http");
 const cors = require("cors");
 const dotenv = require("dotenv");
 
 dotenv.config();
 
-const env = require("./config.js/env");
-const connectDB = require("./config.js/db");
+const env = require("./config/env");
+const connectDB = require("./config/db");
 const authMiddleware = require("./middleware/auth.middleware");
 const authRoutes = require("./modules/auth.routes");
 const urlRoutes = require("./routes/url.routes");
@@ -64,15 +65,24 @@ app.use("/api/urls", authMiddleware, urlRoutes);
 // No auth required — the short code is the only identifier needed.
 app.post("/api/track/:shortCode", urlController.trackClick);
 
+/* ── Public Pre-Click Track Route ── */
+// Called immediately when the loader page opens, before the countdown starts.
+app.post("/api/preclick/:shortCode", urlController.trackPreClick);
+
 /* ── Public Redirect Route ── */
 app.get("/:shortCode", urlController.handleRedirect);
 
 /* ── Start Server AFTER DB CONNECT ── */
+const { initSocket } = require("./socket");
+
 const startServer = async () => {
   try {
     await connectDB();
 
-    app.listen(env.PORT, () => {
+    const httpServer = http.createServer(app);
+    initSocket(httpServer);
+
+    httpServer.listen(env.PORT, () => {
       console.log(`✅ Server Started: http://localhost:${env.PORT}`);
     });
   } catch (error) {
@@ -84,3 +94,10 @@ const startServer = async () => {
 startServer();
 
 module.exports = app;
+
+
+// if (process.env.NODE_ENV !== "test") {
+//   startServer();
+// }
+
+// module.exports = app;

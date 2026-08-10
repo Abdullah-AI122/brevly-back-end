@@ -1,5 +1,5 @@
 const nodemailer = require("nodemailer");
-const env = require("../config.js/env");
+const env = require("../config/env");
 
 /** Create the shared Nodemailer transporter */
 const transporter = nodemailer.createTransport({

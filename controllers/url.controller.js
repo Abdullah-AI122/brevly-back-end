@@ -130,8 +130,8 @@ const handleRedirect = async (req, res) => {
     const title = isDisabled
       ? "Link Disabled"
       : isExpired
-      ? "Link Expired"
-      : "Link Unavailable";
+        ? "Link Expired"
+        : "Link Unavailable";
 
     const badgeText = isDisabled ? "Deactivated" : isExpired ? "Expired" : "404 Not Found";
 
@@ -308,7 +308,6 @@ function buildRedirectPage(destinationUrl, shortCode, utmSource, apiBase, origin
     }, 3000);
   })();
 </script>
-}
 </body>
 </html>`;
 }

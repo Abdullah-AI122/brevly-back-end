@@ -91,13 +91,13 @@ const startServer = async () => {
   }
 };
 
-startServer();
-
-module.exports = app;
-
-
-// if (process.env.NODE_ENV !== "test") {
-//   startServer();
-// }
+// startServer();
 
 // module.exports = app;
+
+
+if (process.env.NODE_ENV !== "test") {
+  startServer();
+}
+
+module.exports = app;

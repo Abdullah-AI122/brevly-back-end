@@ -4,7 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "node test.js",
+    "test": "jest --ci --runInBand",
+    "test:report": "jest --json --outputFile=test-report.json && node generate-report.js",
     "start": "node server.js",
     "dev": "cross-env NODE_OPTIONS=--dns-result-order=ipv4first nodemon server.js"
   },

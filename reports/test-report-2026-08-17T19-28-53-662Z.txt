@@ -1,0 +1,41 @@
+====================================================
+      CURTIO BACKEND TEST EXECUTION REPORT          
+====================================================
+Date/Time       : 8/18/2026, 12:28:53 AM
+Overall Status  : [PASS] ALL TESTS PASSED ✅
+Total Suites    : 3 (3 Passed, 0 Failed)
+Total Tests     : 14
+Passed Tests    : 14 ✅
+Failed Tests    : 0 ❌
+Execution Time  : 24.09 seconds
+====================================================
+
+DETAILED TEST RESULTS:
+----------------------------------------------------
+
+SUITE: url.test.js  --  [PASS] ✅
+----------------------------------------------------
+ [✓] PASS  | POST /api/urls - should return 401 if unauthenticated (76ms)
+ [✓] PASS  | POST /api/urls - should create a short URL when authenticated (322ms)
+ [✓] PASS  | POST /api/urls - should fail when destination URL is missing (10ms)
+ [✓] PASS  | GET /api/urls - should return user's URLs (351ms)
+ [✓] PASS  | PATCH /api/urls/:shortCode/toggle - should toggle URL active status (193ms)
+ [✓] PASS  | DELETE /api/urls/:shortCode - should delete a URL (198ms)
+ [✓] PASS  | GET / - Health check endpoint (17ms)
+
+SUITE: register.test.js  --  [PASS] ✅
+----------------------------------------------------
+ [✓] PASS  | should register a new user successfully (3214ms)
+ [✓] PASS  | should fail registration if email is already registered and verified (returns 409) (215ms)
+ [✓] PASS  | should return 400 when missing required fields (16ms)
+
+SUITE: login.test.js  --  [PASS] ✅
+----------------------------------------------------
+ [✓] PASS  | should fail login when password is wrong (returns 401) (601ms)
+ [✓] PASS  | should fail login when email is not verified (returns 403) (107ms)
+ [✓] PASS  | should fail login when required fields are missing (returns 400) (25ms)
+ [✓] PASS  | should login successfully with correct registered credentials (returns 200) (984ms)
+
+====================================================
+               END OF REPORT                        
+====================================================

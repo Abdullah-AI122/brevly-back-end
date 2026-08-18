@@ -7,8 +7,9 @@ const env = {
   PORT: process.env.PORT,
   AppEmail: process.env.EMAIL_USER,
   AppPassward: process.env.EMAIL_PASS,
-  DB_URL: process.env.DB_URL,
+  DB_URL: process.env.DB_URL || process.env.MONGO_URI,
   JWT_SECRET: process.env.JWT_SECRET,
 };
 
 module.exports = env;
+

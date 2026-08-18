@@ -5,6 +5,7 @@ const authMiddleware = require("../middleware/auth.middleware");
 
 
 const User = require("../models/User");
+const { isOwner } = require("../config/owners");
 const { generateOTP, sendOTPEmail } = require("../utils/otpGenrater");
 const { generateToken } = require("../services/jwt");
 
@@ -53,7 +54,11 @@ router.post("/register", async (req, res) => {
 
     // Send OTP email
     console.log(`🔑 [DEV ONLY] Registration OTP for ${email} is: ${otp}`);
-    await sendOTPEmail(email, otp, name.split(" ")[0]);
+    try {
+      await sendOTPEmail(email, otp, name.split(" ")[0]);
+    } catch (mailErr) {
+      console.warn("⚠️ Failed to send OTP email (SMTP missing/misconfigured):", mailErr.message);
+    }
 
     res.status(200).json({
       success: true,
@@ -104,13 +109,14 @@ router.post("/verify-otp", async (req, res) => {
     await user.save();
 
     // Issue JWT
-    const token = generateToken(user);
+    const token = await generateToken(user);
 
+    const ownerStatus = await isOwner(user.email);
     res.status(200).json({
       success: true,
       message: "Email verified successfully!",
       apiToken: token,
-      LoginUser: { id: user._id, name: user.name, email: user.email },
+      LoginUser: { id: user._id, name: user.name, email: user.email, isOwner: ownerStatus },
     });
   } catch (error) {
     console.error("Verify OTP error:", error);
@@ -146,13 +152,14 @@ router.post("/login", async (req, res) => {
     }
 
     // Issue a fresh JWT on every login
-    const token = generateToken(user);
+    const token = await generateToken(user);
 
+    const ownerStatus = await isOwner(user.email);
     res.status(200).json({
       success: true,
       message: "Login successful!",
       apiToken: token,
-      LoginUser: { id: user._id, name: user.name, email: user.email },
+      LoginUser: { id: user._id, name: user.name, email: user.email, isOwner: ownerStatus },
     });
   } catch (error) {
     console.error("Login error:", error);
@@ -224,7 +231,7 @@ router.post("/google", async (req, res) => {
       await user.save();
     }
 
-    const jwtToken = generateToken(user);
+    const jwtToken = await generateToken(user);
     res.status(200).json({
       success: true,
       message: "Google login successful!",
@@ -315,6 +322,30 @@ router.patch("/update-profile", authMiddleware, async (req, res) => {
   } catch (err) {
     console.error('❌ update-profile error:', err);
     res.status(500).json({ success: false, message: "Server error" });
+  }
+});
+
+/* ── Custom Labels (Protected) ── */
+router.put("/labels", authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { labels } = req.body;
+    if (!labels) {
+      return res.status(400).json({ success: false, message: "Labels object is required." });
+    }
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found." });
+    }
+    
+    // Set labels
+    user.labels = labels;
+    await user.save();
+    
+    res.json({ success: true, message: "Labels updated successfully", labels: user.labels });
+  } catch (err) {
+    console.error("Update labels error:", err);
+    res.status(500).json({ success: false, message: "Server error." });
   }
 });
 

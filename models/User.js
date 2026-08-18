@@ -28,6 +28,18 @@ const urlSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    labels: {
+      type: [String],
+      default: [],
+    },
+    campaigns: [
+      {
+        name: { type: String, required: true },
+        source: { type: String, default: "" },
+        medium: { type: String, default: "" },
+        _id: false,
+      },
+    ],
     clickLogs: [
       {
         ip: String,
@@ -52,6 +64,37 @@ const urlSchema = new mongoose.Schema(
         botReason: {
           type: String,
           default: null,
+        },
+
+        country: {
+          type: String,
+          default: "unknown",
+        },
+
+        countryCode: {
+          type: String,
+          default: "unknown",
+        },
+
+        clickedAt: {
+          type: Date,
+          default: Date.now,
+        },
+      },
+    ],
+    preClicks: {
+      type: Number,
+      default: 0,
+    },
+    preClickLogs: [
+      {
+        ip: String,
+        userAgent: String,
+        referer: String,
+
+        source: {
+          type: String,
+          default: "unknown",
         },
 
         country: {
@@ -103,6 +146,18 @@ const userSchema = new mongoose.Schema(
     otpExpiry: {
       type: Date,
       default: null,
+    },
+    labels: {
+      type: Map,
+      of: {
+        name: { type: String, required: true },
+        color: { type: String, required: true }
+      },
+      default: {
+        "1": { name: "Priority", color: "#ef4444" },
+        "2": { name: "Marketing", color: "#3b82f6" },
+        "3": { name: "Product", color: "#10b981" }
+      }
     },
     urls: [urlSchema],
   },

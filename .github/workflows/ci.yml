@@ -1,0 +1,40 @@
+name: Node.js CI
+
+on:
+  push:
+    branches: [ "main", "prod" ]
+  pull_request:
+    branches: [ "main", "prod" ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      mongodb:
+        image: mongo:6.0
+        ports:
+          - 27017:27017
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Jest tests
+        run: npm test -- --ci --runInBand
+        env:
+          NODE_ENV: test
+          DB_URL: mongodb://127.0.0.1:27017/curtio_test_db
+          MONGO_URI: mongodb://127.0.0.1:27017/curtio_test_db
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+
+

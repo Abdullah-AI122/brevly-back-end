@@ -1,4 +1,6 @@
 const User = require("../models/User");
+const OwnerPreClick = require("../models/OwnerPreClick");
+const { isOwner } = require("../config/owners");
 const validator = require("validator");
 
 /**
@@ -77,7 +79,18 @@ const addShortUrl = async (userId, { originalUrl, customAlias, password, expires
     shortCode = await generateUniqueCode();
   }
 
-  // 4. Create and push the URL object
+  // 4. Extract utm_campaign and utm_source if present in originalUrl
+  let initialCampaigns = [];
+  try {
+    const urlParsed = new URL(originalUrl);
+    const cParam = urlParsed.searchParams.get("utm_campaign");
+    const sParam = urlParsed.searchParams.get("utm_source");
+    if (cParam && cParam.trim()) {
+      initialCampaigns.push({ name: cParam.trim(), source: (sParam || "").trim() });
+    }
+  } catch (e) {}
+
+  // Create and push the URL object
   const urlObject = {
     originalUrl,
     shortCode,
@@ -85,6 +98,7 @@ const addShortUrl = async (userId, { originalUrl, customAlias, password, expires
     active: true,
     password: password || null,
     expiresAt: expiresAt ? new Date(expiresAt) : null,
+    campaigns: initialCampaigns,
     clickLogs: [],
   };
 
@@ -233,6 +247,12 @@ function isWebBrowser(userAgent, headers = {}) {
     return false;
   }
 
+  // 2. Exclude browser address bar autocompletion & pre-rendering prefetch hits
+  const purpose = headers["purpose"] || headers["sec-purpose"] || headers["x-purpose"] || headers["x-moz"] || "";
+  if (/prefetch|preview/i.test(purpose)) {
+    return false;
+  }
+
   // Allow standard browsers and mobile in-app browsers
   return true;
 }
@@ -271,18 +291,89 @@ const resolveShortUrl = async (shortCode, { enteredPassword } = {}) => {
   return urlObj;
 };
 
+// In-memory cache for temporary preCheck/postCheck session tracking
+const pendingVisits = new Map();
+
+/**
+ * Helper to commit a non-redirected pre-click to DB if user left early (postCheck remains false).
+ */
+async function finalizePreClick(visitId) {
+  const visit = pendingVisits.get(visitId);
+  if (!visit) return;
+  pendingVisits.delete(visitId);
+
+  if (visit.postCheck) return; // User completed redirect, do not count in preClicks
+
+  try {
+    const user = await User.findOne({ "urls.shortCode": visit.shortCode });
+    if (!user) return;
+
+    // Pre-clicks are tracked in the user document ONLY for users registered in the owners collection
+    const ownerStatus = await isOwner(user.email);
+    if (!ownerStatus) return;
+
+    const urlObj = user.urls.find((u) => u.shortCode === visit.shortCode);
+    if (!urlObj || !urlObj.active) return;
+
+    const { getGeoData } = require("../utils/geoip");
+    const geoData = await getGeoData(visit.ip, visit.headers);
+    if (!geoData || geoData.isAutomated) return;
+
+    const referer = visit.originalReferer !== null && visit.originalReferer !== undefined
+      ? visit.originalReferer
+      : visit.headers?.referer || visit.headers?.referrer || null;
+    const xRequestedWith = visit.headers?.["x-requested-with"] || null;
+
+    const source = visit.utmSource
+      ? getPlatformFromUtm(visit.utmSource)
+      : getSource(visit.ua, referer, xRequestedWith);
+
+    const preClickEntry = {
+      ip: visit.ip || "unknown",
+      userAgent: visit.ua || "unknown",
+      referer,
+      source,
+      country: geoData.country,
+      countryCode: geoData.countryCode,
+      clickedAt: visit.clickedAt,
+    };
+
+    urlObj.preClicks += 1;
+    urlObj.preClickLogs.push(preClickEntry);
+    await user.save();
+
+    // Emit real-time updates to the URL owner's private socket room
+    try {
+      const { getIO } = require("../socket");
+      const io = getIO();
+      const updatedData = urlObj.toObject();
+      io.to(user._id.toString()).emit("preclick:updated", updatedData);
+      io.to(user._id.toString()).emit("analytics:updated", updatedData);
+    } catch (_) { /* Socket not initialized — skip silently */ }
+  } catch (err) {
+    console.error("Finalize pre-click error:", err);
+  }
+}
+
 /**
  * Record a click for a short URL.
- * Called ONLY after the loader page has fully counted down (≥3 s on the client),
- * so closing the tab before redirect fires will NOT register a click.
+ * Called by the loader page JS after the 3-second countdown completes.
  */
-const trackClick = async (shortCode, { ip, userAgent, headers, utmSource }) => {
-  // ── Bot check — ignore programmatic / preview fetches ──
+const trackClick = async (shortCode, { ip, userAgent, headers, utmSource, originalReferer, visitId }) => {
   const ua = userAgent || "";
   if (!isWebBrowser(ua, headers)) return;
 
+  // Mark postCheck = true for this session if present in temporary cache
+  if (visitId && pendingVisits.has(visitId)) {
+    const visit = pendingVisits.get(visitId);
+    visit.postCheck = true;
+    visit.preCheck = false;
+    if (visit.timer) clearTimeout(visit.timer);
+    pendingVisits.delete(visitId);
+  }
+
   const user = await User.findOne({ "urls.shortCode": shortCode });
-  if (!user) return; // silently ignore — URL may have been deleted
+  if (!user) return;
 
   const urlObj = user.urls.find((u) => u.shortCode === shortCode);
   if (!urlObj || !urlObj.active) return;
@@ -300,7 +391,12 @@ const trackClick = async (shortCode, { ip, userAgent, headers, utmSource }) => {
   const { getGeoData } = require("../utils/geoip");
   const geoData = await getGeoData(ip, headers);
 
-  const referer = headers?.referer || headers?.referrer || null;
+  // Reject click tracking if GeoIP lookup failed due to network/API timeout issues
+  if (!geoData || geoData.isAutomated) return;
+
+  const referer = originalReferer !== null && originalReferer !== undefined
+    ? originalReferer
+    : headers?.referer || headers?.referrer || null;
   const xRequestedWith = headers?.["x-requested-with"] || null;
 
   const source = utmSource
@@ -320,6 +416,45 @@ const trackClick = async (shortCode, { ip, userAgent, headers, utmSource }) => {
   });
 
   await user.save();
+
+  // Emit real-time analytics update to the URL owner only
+  try {
+    const { getIO } = require("../socket");
+    const io = getIO();
+    io.to(user._id.toString()).emit("analytics:updated", urlObj.toObject());
+  } catch (_) { /* Socket not initialized — skip silently */ }
+};
+
+/**
+ * Record a pre-click for a short URL into temporary session cache.
+ * If user leaves before loader countdown completes, timer flushes log into preClicks DB.
+ */
+const trackPreClick = async (shortCode, { ip, userAgent, headers, utmSource, originalReferer, visitId }) => {
+  const ua = userAgent || "";
+  if (!isWebBrowser(ua, headers)) return;
+
+  if (!visitId) {
+    // Fallback if no visitId generated
+    visitId = 'v_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
+  }
+
+  // 3.5-second window: if postCheck isn't set to true within 3.5 seconds (after 3s redirect timer), user closed tab early
+  const timer = setTimeout(() => {
+    finalizePreClick(visitId);
+  }, 3500);
+
+  pendingVisits.set(visitId, {
+    shortCode,
+    ip,
+    ua,
+    headers,
+    utmSource,
+    originalReferer,
+    preCheck: true,
+    postCheck: false,
+    clickedAt: new Date(),
+    timer,
+  });
 };
 
 /**
@@ -330,7 +465,8 @@ const getUserUrls = async (userId) => {
   if (!user) {
     throw new Error("User not found.");
   }
-  return user.urls;
+
+  return { urls: user.urls, labels: user.labels || {} };
 };
 
 /**
@@ -371,12 +507,192 @@ const toggleUserUrlActive = async (userId, shortCode) => {
   return urlObj;
 };
 
+/**
+ * Update the labels of a shortened URL.
+ */
+const updateUserUrlLabels = async (userId, shortCode, labels) => {
+  const user = await User.findById(userId);
+  if (!user) {
+    throw new Error("User not found.");
+  }
+
+  const urlObj = user.urls.find((u) => u.shortCode === shortCode);
+  if (!urlObj) {
+    throw new Error("Short URL not found under this account.");
+  }
+
+  urlObj.labels = labels;
+  await user.save();
+  return urlObj;
+};
+
+/**
+ * Update the campaigns of a shortened URL.
+ * Accepts an array of { name, source, medium } objects.
+ */
+const updateUserUrlCampaigns = async (userId, shortCode, campaigns) => {
+  const user = await User.findById(userId);
+  if (!user) {
+    throw new Error("User not found.");
+  }
+
+  const urlObj = user.urls.find((u) => u.shortCode === shortCode);
+  if (!urlObj) {
+    throw new Error("Short URL not found under this account.");
+  }
+
+  if (!Array.isArray(campaigns)) {
+    throw new Error("Campaigns must be an array of { name, source, medium } objects.");
+  }
+
+  // Normalize: accept both plain strings (backward compat) and objects
+  urlObj.campaigns = campaigns
+    .map((c) => {
+      if (typeof c === "string") {
+        return { name: c.trim(), source: "", medium: "" };
+      }
+      return {
+        name: String(c.name || "").trim(),
+        source: String(c.source || "").trim(),
+        medium: String(c.medium || "").trim(),
+      };
+    })
+    .filter((c) => c.name);
+
+  await user.save();
+  return urlObj;
+};
+
+/**
+ * Rename an existing campaign across all links for a user.
+ */
+const renameUserCampaign = async (userId, oldCampaignName, newCampaignName) => {
+  const user = await User.findById(userId);
+  if (!user) {
+    throw new Error("User not found.");
+  }
+
+  const oldTarget = oldCampaignName.trim().toLowerCase();
+  const newName = newCampaignName.trim();
+  if (!newName) {
+    throw new Error("New campaign name is required.");
+  }
+
+  let modifiedCount = 0;
+
+  user.urls.forEach((urlObj) => {
+    let wasModified = false;
+
+    // 1. Update campaigns array
+    if (Array.isArray(urlObj.campaigns)) {
+      urlObj.campaigns.forEach((c) => {
+        if ((c.name || c).toString().trim().toLowerCase() === oldTarget) {
+          c.name = newName;
+          wasModified = true;
+        }
+      });
+    }
+
+    // 2. Update originalUrl query param if matching
+    try {
+      const urlParsed = new URL(urlObj.originalUrl);
+      const campaignParam = urlParsed.searchParams.get("utm_campaign");
+      if (campaignParam && campaignParam.trim().toLowerCase() === oldTarget) {
+        urlParsed.searchParams.set("utm_campaign", newName);
+        urlObj.originalUrl = urlParsed.toString();
+        wasModified = true;
+      }
+    } catch (e) {
+      if (new RegExp(`[?&]utm_campaign=${oldCampaignName}`, "i").test(urlObj.originalUrl)) {
+        urlObj.originalUrl = urlObj.originalUrl.replace(
+          new RegExp(`([?&]utm_campaign=)${oldCampaignName}`, "gi"),
+          `$1${encodeURIComponent(newName)}`
+        );
+        wasModified = true;
+      }
+    }
+
+    if (wasModified) modifiedCount++;
+  });
+
+  if (modifiedCount > 0) {
+    await user.save();
+  }
+
+  return { modifiedCount };
+};
+
+/**
+ * Delete a campaign by removing campaignName from campaigns array
+ * and removing utm_campaign from originalUrl of all matching links for a user.
+ * The links themselves remain intact in the database.
+ */
+const deleteUserCampaign = async (userId, campaignName) => {
+  const user = await User.findById(userId);
+  if (!user) {
+    throw new Error("User not found.");
+  }
+
+  let modifiedCount = 0;
+  const targetCampaign = campaignName.trim().toLowerCase();
+
+  user.urls.forEach((urlObj) => {
+    let wasModified = false;
+
+    // 1. Check campaigns array (now array of {name, source, medium} objects)
+    if (Array.isArray(urlObj.campaigns) && urlObj.campaigns.length > 0) {
+      const origLength = urlObj.campaigns.length;
+      urlObj.campaigns = urlObj.campaigns.filter(
+        (c) => (c.name || c).toString().trim().toLowerCase() !== targetCampaign
+      );
+      if (urlObj.campaigns.length !== origLength) {
+        wasModified = true;
+      }
+    }
+
+    // 2. Check originalUrl query param
+    try {
+      const urlParsed = new URL(urlObj.originalUrl);
+      const campaignParam = urlParsed.searchParams.get("utm_campaign");
+      if (campaignParam && campaignParam.trim().toLowerCase() === targetCampaign) {
+        urlParsed.searchParams.delete("utm_campaign");
+        urlParsed.searchParams.delete("utm_source");
+        urlParsed.searchParams.delete("utm_medium");
+        urlObj.originalUrl = urlParsed.toString();
+        wasModified = true;
+      }
+    } catch (e) {
+      if (new RegExp(`[?&]utm_campaign=${campaignName}`, "i").test(urlObj.originalUrl)) {
+        urlObj.originalUrl = urlObj.originalUrl
+          .replace(new RegExp(`[?&]utm_campaign=${campaignName}[^&#]*`, "gi"), "")
+          .replace(/[?&]utm_source=[^&#]*/gi, "")
+          .replace(/[?&]utm_medium=[^&#]*/gi, "")
+          .replace(/\?$/, "");
+        wasModified = true;
+      }
+    }
+
+    if (wasModified) modifiedCount++;
+  });
+
+  if (modifiedCount > 0) {
+    await user.save();
+  }
+
+  return { modifiedCount };
+};
+
 module.exports = {
   validateUrl,
   addShortUrl,
   resolveShortUrl,
   trackClick,
+  trackPreClick,
   getUserUrls,
   deleteUserUrl,
   toggleUserUrlActive,
+  updateUserUrlLabels,
+  updateUserUrlCampaigns,
+  renameUserCampaign,
+  deleteUserCampaign,
 };

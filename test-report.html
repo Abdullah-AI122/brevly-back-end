@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Curtio Test Execution Report</title>
+  <style>
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #0f172a; color: #f8fafc; margin: 0; padding: 40px; }
+    .container { max-width: 900px; margin: 0 auto; background: #1e293b; border-radius: 12px; padding: 32px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
+    h1 { color: #38bdf8; margin-top: 0; display: flex; align-items: center; gap: 12px; }
+    .status-badge { display: inline-block; padding: 6px 16px; border-radius: 20px; font-weight: bold; font-size: 14px; text-transform: uppercase; }
+    .status-badge.pass { background: #15803d; color: #dcfce7; }
+    .status-badge.fail { background: #b91c1c; color: #fee2e2; }
+    .metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin: 24px 0; }
+    .metric-card { background: #334155; padding: 16px; border-radius: 8px; text-align: center; }
+    .metric-value { font-size: 28px; font-weight: bold; margin-top: 4px; color: #f1f5f9; }
+    .metric-label { font-size: 12px; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; }
+    .suite-card { background: #334155; margin-bottom: 20px; border-radius: 8px; overflow: hidden; border: 1px solid #475569; }
+    .suite-header { background: #475569; padding: 14px 20px; font-weight: bold; font-size: 16px; display: flex; justify-content: space-between; align-items: center; }
+    .test-list { list-style: none; padding: 0; margin: 0; }
+    .test-item { padding: 12px 20px; border-bottom: 1px solid #334155; display: flex; justify-content: space-between; align-items: center; font-size: 14px; }
+    .test-item:last-child { border-bottom: none; }
+    .test-title { display: flex; align-items: center; gap: 10px; }
+    .tick { font-size: 16px; }
+    .duration { color: #94a3b8; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🧪 Curtio Backend Test Report</h1>
+    <p style="color: #94a3b8; margin-bottom: 20px;">Generated on: 8/18/2026, 12:36:44 AM</p>
+    
+    <div>
+      <span class="status-badge pass">✅ ALL TESTS PASSED</span>
+    </div>
+
+    <div class="metrics-grid">
+      <div class="metric-card">
+        <div class="metric-label">Total Test Suites</div>
+        <div class="metric-value">3</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Passed Tests</div>
+        <div class="metric-value" style="color: #4ade80;">✅ 14</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Failed Tests</div>
+        <div class="metric-value" style="color: #94a3b8;">0</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Total Duration</div>
+        <div class="metric-value">25.72s</div>
+      </div>
+    </div>
+
+    <h2>Test Details</h2>
+
+    <div class="suite-card">
+      <div class="suite-header">
+        <span>📄 url.test.js</span>
+        <span style="color: #4ade80;">✅ PASS</span>
+      </div>
+      <ul class="test-list">
+  
+        <li class="test-item">
+          <span class="test-title">
+            <span class="tick">✅</span>
+            <span>POST /api/urls - should return 401 if unauthenticated</span>
+          </span>
+          <span class="duration">112 ms</span>
+        </li>
+    
+        <li class="test-item">
+          <span class="test-title">
+            <span class="tick">✅</span>
+            <span>POST /api/urls - should create a short URL when authenticated</span>
+          </span>
+          <span class="duration">290 ms</span>
+        </li>
+    
+        <li class="test-item">
+          <span class="test-title">
+            <span class="tick">✅</span>
+            <span>POST /api/urls - should fail when destination URL is missing</span>
+          </span>
+          <span class="duration">8 ms</span>
+        </li>
+    
+        <li class="test-item">
+          <span class="test-title">
+            <span class="tick">✅</span>
+            <span>GET /api/urls - should return user's URLs</span>
+          </span>
+          <span class="duration">192 ms</span>
+        </li>
+    
+        <li class="test-item">
+          <span class="test-title">
+            <span class="tick">✅</span>
+            <span>PATCH /api/urls/:shortCode/toggle - should toggle URL active status</span>
+          </span>
+          <span class="duration">206 ms</span>
+        </li>
+    
+        <li class="test-item">
+          <span class="test-title">
+            <span class="tick">✅</span>
+            <span>DELETE /api/urls/:shortCode - should delete a URL</span>
+          </span>
+          <span class="duration">215 ms</span>
+        </li>
+    
+        <li class="test-item">
+          <span class="test-title">
+            <span class="tick">✅</span>
+            <span>GET / - Health check endpoint</span>
+          </span>
+          <span class="duration">18 ms</span>
+        </li>
+    
+      </ul>
+    </div>
+  
+    <div class="suite-card">
+      <div class="suite-header">
+        <span>📄 register.test.js</span>
+        <span style="color: #4ade80;">✅ PASS</span>
+      </div>
+      <ul class="test-list">
+  
+        <li class="test-item">
+          <span class="test-title">
+            <span class="tick">✅</span>
+            <span>should register a new user successfully</span>
+          </span>
+          <span class="duration">3683 ms</span>
+        </li>
+    
+        <li class="test-item">
+          <span class="test-title">
+            <span class="tick">✅</span>
+            <span>should fail registration if email is already registered and verified (returns 409)</span>
+          </span>
+          <span class="duration">250 ms</span>
+        </li>
+    
+        <li class="test-item">
+          <span class="test-title">
+            <span class="tick">✅</span>
+            <span>should return 400 when missing required fields</span>
+          </span>
+          <span class="duration">17 ms</span>
+        </li>
+    
+      </ul>
+    </div>
+  
+    <div class="suite-card">
+      <div class="suite-header">
+        <span>📄 login.test.js</span>
+        <span style="color: #4ade80;">✅ PASS</span>
+      </div>
+      <ul class="test-list">
+  
+        <li class="test-item">
+          <span class="test-title">
+            <span class="tick">✅</span>
+            <span>should fail login when password is wrong (returns 401)</span>
+          </span>
+          <span class="duration">756 ms</span>
+        </li>
+    
+        <li class="test-item">
+          <span class="test-title">
+            <span class="tick">✅</span>
+            <span>should fail login when email is not verified (returns 403)</span>
+          </span>
+          <span class="duration">106 ms</span>
+        </li>
+    
+        <li class="test-item">
+          <span class="test-title">
+            <span class="tick">✅</span>
+            <span>should fail login when required fields are missing (returns 400)</span>
+          </span>
+          <span class="duration">18 ms</span>
+        </li>
+    
+        <li class="test-item">
+          <span class="test-title">
+            <span class="tick">✅</span>
+            <span>should login successfully with correct registered credentials (returns 200)</span>
+          </span>
+          <span class="duration">780 ms</span>
+        </li>
+    
+      </ul>
+    </div>
+  
+  </div>
+</body>
+</html>

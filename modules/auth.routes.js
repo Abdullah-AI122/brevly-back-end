@@ -54,7 +54,11 @@ router.post("/register", async (req, res) => {
 
     // Send OTP email
     console.log(`🔑 [DEV ONLY] Registration OTP for ${email} is: ${otp}`);
-    await sendOTPEmail(email, otp, name.split(" ")[0]);
+    try {
+      await sendOTPEmail(email, otp, name.split(" ")[0]);
+    } catch (mailErr) {
+      console.warn("⚠️ Failed to send OTP email (SMTP missing/misconfigured):", mailErr.message);
+    }
 
     res.status(200).json({
       success: true,
